@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: infosys-enterprise-gpt-demo
+    name: manoj-business-associate-ai-assistant
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -11,7 +11,9 @@ services:
         value: 0.0.0.0
       - key: APP_SECRET
         generateValue: true
-      - key: DEMO_PASSWORD
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CUSTOMER_PASSWORD
         sync: false
       - key: GEMINI_MODEL
         value: gemini-flash-latest

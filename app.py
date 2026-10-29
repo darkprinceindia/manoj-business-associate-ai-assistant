@@ -1,4 +1,4 @@
-"""Zero-framework HTTP application for the capstone demonstration."""
+"""HTTP application for the Manoj Business Associate AI assistant."""
 
 from __future__ import annotations
 
@@ -44,7 +44,9 @@ def sign_session(user_id: str) -> str:
     payload = {"uid": user_id, "exp": int((datetime.now(timezone.utc) + timedelta(hours=12)).timestamp())}
     encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
-    return encoded + "." + signature
+    token = encoded + "." + signature
+    k.store_session(hashlib.sha256(token.encode()).hexdigest(), user_id, payload["exp"])
+    return token
 
 
 def read_session(token: str) -> str | None:
@@ -54,7 +56,10 @@ def read_session(token: str) -> str | None:
         if not hmac.compare_digest(signature, expected):
             return None
         payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-        return payload["uid"] if payload["exp"] > time.time() else None
+        if payload["exp"] <= time.time():
+            return None
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        return payload["uid"] if k.session_user(token_hash) == payload["uid"] else None
     except (ValueError, KeyError, TypeError, binascii.Error, UnicodeError):
         return None
 
@@ -62,12 +67,16 @@ def read_session(token: str) -> str | None:
 def mcp_search(question: str, user: dict, department: str) -> tuple[list[dict], str | None, int]:
     """Call the bundled read-only MCP server over stdio JSON-RPC."""
     start = time.monotonic()
-    requests = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "enterprise-gpt", "version": "1.0"}}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "search_curated_knowledge", "arguments": {"question": question, "user_id": user["id"], "department": department}}},
-    ]
     try:
+        # The parent owns the embedded Qdrant client; its local files cannot be
+        # opened by a second process. The MCP tool receives candidate IDs and
+        # reranks them against SQL after checking the user's permissions.
+        candidates = k.vector_candidates(question, user, department)
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "manoj-business-assistant", "version": "1.0"}}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "search_curated_knowledge", "arguments": {"question": question, "user_id": user["id"], "department": department, "candidates": candidates}}},
+        ]
         process = subprocess.run([sys.executable, str(ROOT / "mcp_server.py")],
                                  input="\n".join(json.dumps(x) for x in requests) + "\n",
                                  text=True, capture_output=True, timeout=10, cwd=ROOT)
@@ -85,14 +94,17 @@ def mcp_search(question: str, user: dict, department: str) -> tuple[list[dict], 
         return [], str(exc)[:200], int((time.monotonic() - start) * 1000)
 
 
-def answer_query(question: str, user: dict, requested_department: str = "All") -> dict:
+def answer_query(question: str, user: dict, requested_department: str = "All",
+                 chat_id: str | None = None) -> dict:
     if not question.strip() or len(question) > 2000:
         raise ValueError("Enter a question up to 2,000 characters.")
     if requested_department not in (*k.DEPARTMENTS, "All"):
         raise ValueError("Invalid department filter.")
+    if chat_id and not k.get_chat(chat_id, user):
+        raise PermissionError("Chat not found or not yours.")
     start = time.monotonic()
     department = k.classify_query(question, requested_department)
-    route = "MCP curated knowledge" if department == "HR" else "Local hybrid index"
+    route = "MCP product knowledge" if department == "Products" else "Local hybrid index"
     connector_error = None
     connector_ms = 0
     if route.startswith("MCP"):
@@ -104,6 +116,13 @@ def answer_query(question: str, user: dict, requested_department: str = "All") -
         sources = k.search(question, user, department if department != "All" else None)
     if not sources and department != "All" and requested_department == "All":
         sources = k.search(question, user)
+    requested_models = set(re.findall(r"\b(?:CI|HI)[A-Z0-9]{8,}\b", question.upper()))
+    if requested_models:
+        def matches_requested_model(source):
+            source_models = set(re.findall(r"\b(?:CI|HI)[A-Z0-9]{8,}\b",
+                                           (source["title"] + " " + source["text"]).upper()))
+            return not source_models or bool(source_models & requested_models)
+        sources = [source for source in sources if matches_requested_model(source)]
     if sources:
         terms = set(k.tokenize(question))
         def evidence_overlap(source):
@@ -111,11 +130,13 @@ def answer_query(question: str, user: dict, requested_department: str = "All") -
             return max((len(terms & set(k.tokenize(sentence))) for sentence in sentences), default=0)
         strongest_overlap = evidence_overlap(sources[0])
         minimum_overlap = 2 if strongest_overlap >= 2 and len(terms) >= 3 else 1
-        sources = [source for source in sources if evidence_overlap(source) >= minimum_overlap][:3]
+        sources = [source for source in sources
+                   if evidence_overlap(source) >= minimum_overlap
+                   and len(terms & set(k.tokenize(source["section"] + " " + source["text"]))) / len(terms) >= 0.34][:3]
     no_answer = not sources or sources[0]["score"] < 0.19
     if no_answer:
         sources = []
-        answer = "I could not find enough evidence in the approved sources to answer this question. Try another term or ask a knowledge owner to add the missing document."
+        answer = "I could not find enough information in the shop documents to answer that. Please contact the shop for confirmation."
         confidence = 0.0
         synthesis = "No answer"
     else:
@@ -126,26 +147,36 @@ def answer_query(question: str, user: dict, requested_department: str = "All") -
     query_id = uuid.uuid4().hex
     latency_ms = int((time.monotonic() - start) * 1000)
     with k.connect() as db:
-        db.execute("INSERT INTO queries VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (query_id, user["id"], question.strip(), department, route, answer, int(no_answer), confidence, latency_ms, k.utcnow()))
+        now = k.utcnow()
+        if not chat_id:
+            chat_id = uuid.uuid4().hex
+            db.execute("INSERT INTO chats VALUES (?,?,?,?,?)",
+                       (chat_id, user["id"], question.strip()[:72], now, now))
+        else:
+            db.execute("UPDATE chats SET updated_at=? WHERE id=? AND user_id=?", (now, chat_id, user["id"]))
+        db.execute("""INSERT INTO queries
+                   (id,user_id,question,department,route,answer,no_answer,confidence,latency_ms,created_at,chat_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   (query_id, user["id"], question.strip(), department, route, answer,
+                    int(no_answer), confidence, latency_ms, now, chat_id))
         for number, source in enumerate(sources, 1):
             db.execute("INSERT INTO query_sources VALUES (?,?,?)", (query_id, source["id"], number))
         if route.startswith("MCP") or connector_error:
             db.execute("INSERT INTO connector_calls VALUES (?,?,?,?,?,?,?,?)",
-                       (uuid.uuid4().hex, query_id, "curated-knowledge", "error" if connector_error else "success",
+                       (uuid.uuid4().hex, query_id, "product-knowledge", "error" if connector_error else "success",
                         len(sources), connector_ms, connector_error, k.utcnow()))
         k.audit(db, user["id"], "query", query_id, {"route": route, "sources": len(sources), "no_answer": no_answer})
     citations = [{"number": i, "document_id": s["document_id"], "title": s["title"],
                   "section": s["section"], "snippet": s["text"], "effective_date": s["effective_date"],
                   "owner": s["owner"], "classification": s["classification"], "score": s["score"]}
                  for i, s in enumerate(sources, 1)]
-    return {"id": query_id, "answer": answer, "citations": citations, "route": route,
+    return {"id": query_id, "chat_id": chat_id, "answer": answer, "citations": citations, "route": route,
             "department": department, "confidence": confidence, "no_answer": no_answer,
             "latency_ms": latency_ms, "model": synthesis}
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "EnterpriseGPT/1.0"
+    server_version = "ManojBusinessAssistant/1.0"
 
     def send_json(self, value: object, status: int = 200, cookie: str | None = None) -> None:
         raw = json.dumps(value).encode()
@@ -193,6 +224,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/me":
                 return self.send_json({"user": self.user()})
+            if path == "/api/chats":
+                return self.send_json({"chats": k.list_chats(self.require_user())})
+            if path.startswith("/api/chats/"):
+                chat = k.get_chat(path.rsplit("/", 1)[-1], self.require_user())
+                return self.send_json(chat or {"error": "Chat not found"}, 200 if chat else 404)
             if path == "/api/documents":
                 return self.send_json({"documents": k.list_documents(self.require_user())})
             if path.startswith("/api/documents/"):
@@ -202,7 +238,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(k.analytics(self.require_user()))
             if path == "/api/connectors":
                 self.require_user()
-                return self.send_json({"connectors": [{"name": "curated-knowledge", "protocol": "MCP stdio JSON-RPC",
+                return self.send_json({"connectors": [{"name": "product-knowledge", "protocol": "MCP stdio JSON-RPC",
                     "status": "ready", "tools": ["search_curated_knowledge"], "scope": "permission-filtered curated index"}]})
             if path == "/" or path.startswith("/static/"):
                 filename = "index.html" if path == "/" else path[len("/static/"):]
@@ -241,10 +277,20 @@ class Handler(BaseHTTPRequestHandler):
                 cookie = f"session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200{secure}"
                 return self.send_json({"user": {field: row[field] for field in ("id", "name", "email", "department", "role")}}, cookie=cookie)
             if path == "/api/logout":
+                cookie = SimpleCookie()
+                try:
+                    cookie.load(self.headers.get("Cookie", ""))
+                    k.revoke_session(hashlib.sha256(cookie["session"].value.encode()).hexdigest())
+                except KeyError:
+                    pass
                 return self.send_json({"ok": True}, cookie="session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0")
             user = self.require_user()
             if path == "/api/query":
-                return self.send_json(answer_query(data.get("question", ""), user, data.get("department", "All")))
+                return self.send_json(answer_query(data.get("question", ""), user,
+                                                   data.get("department", "All"), data.get("chat_id")))
+            if path == "/api/analytics/review":
+                k.review_answer(data.get("query_id", ""), user, data.get("verdict", ""))
+                return self.send_json({"saved": True})
             if path == "/api/documents/upload":
                 if user["role"] != "admin":
                     raise PermissionError("Administrator access required to upload documents.")
@@ -282,11 +328,11 @@ def main() -> None:
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8000"))
     if host not in ("127.0.0.1", "localhost", "::1"):
-        if not os.environ.get("APP_SECRET") or not os.environ.get("DEMO_PASSWORD"):
-            raise SystemExit("Set APP_SECRET and DEMO_PASSWORD before binding to a public interface.")
+        if not all(os.environ.get(name) for name in ("APP_SECRET", "ADMIN_PASSWORD", "CUSTOMER_PASSWORD")):
+            raise SystemExit("Set APP_SECRET, ADMIN_PASSWORD, and CUSTOMER_PASSWORD before binding to a public interface.")
     k.init_db()
     server = ThreadingHTTPServer((host, port), Handler)
-    print(f"Enterprise GPT is running at http://{host}:{port}", flush=True)
+    print(f"Manoj Business Associate AI assistant is running at http://{host}:{port}", flush=True)
     server.serve_forever()
 
 

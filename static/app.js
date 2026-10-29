@@ -1,4 +1,4 @@
-const state = { user: null, page: 'ask', answer: null, documents: [] };
+const state = { user: null, page: 'ask', answer: null, chatId: null, documents: [] };
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -12,23 +12,44 @@ async function api(path, method = 'GET', body) {
 }
 
 function showLogin() {
+  state.user = null;
+  state.answer = null;
+  state.chatId = null;
+  $('login-password').value = '';
+  $('profile-form').reset();
+  $('answer-card').classList.add('hidden');
+  $('chat-list').innerHTML = '';
+  $('conversation-history').innerHTML = '';
+  $('conversation-history').classList.add('hidden');
+  $('profile-screen').classList.add('hidden');
   $('login').classList.remove('hidden'); $('app').classList.add('hidden');
+}
+
+function showProfile() {
+  $('login').classList.add('hidden');
+  $('app').classList.add('hidden');
+  $('profile-screen').classList.remove('hidden');
+  $('profile-demo-status').classList.add('hidden');
+  $('profile-form').reset();
+  $('profile-name').focus();
 }
 
 function showApp(user) {
   state.user = user;
+  $('profile-screen').classList.add('hidden');
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   $('user-name').textContent = user.name;
-  $('user-dept').textContent = `${user.department} · ${user.role}`;
+  $('user-dept').textContent = user.role === 'admin' ? 'Admin' : 'Customer';
   $('avatar').textContent = user.name[0];
-  $('top-role').textContent = user.role === 'admin' ? 'ADMINISTRATOR' : `${user.department.toUpperCase()} ACCESS`;
+  $('top-role').textContent = user.role === 'admin' ? 'ADMIN' : 'CUSTOMER';
   document.querySelectorAll('.admin-only').forEach(el => {
     if (user.role !== 'admin') el.classList.add('hidden');
     else if (el.id !== 'upload-panel') el.classList.remove('hidden');
   });
   $('upload-panel').classList.add('hidden');
   loadSuggestions();
-  showPage('ask');
+  loadChats();
+  showPage(user.role === 'admin' ? 'analytics' : 'ask');
 }
 
 function showPage(page) {
@@ -43,11 +64,9 @@ function showPage(page) {
 
 function loadSuggestions() {
   const all = [
-    'How do we escalate a P1 delivery incident?',
-    'What is the annual leave request process?',
-    'When should an API deployment be rolled back?',
-    'What requires review before a client proposal?',
-    'What is on the new project checklist?'
+    'What warranty does the IFB CI1832D223GN1 3-star AC have?',
+    'What warranty does the IFB CI1852D223GN1 5-star AC have?',
+    'What conditions apply to IFB AC five-year Super Warranty?'
   ];
   const list = $('suggestion-list'); list.innerHTML = '';
   all.forEach(question => {
@@ -55,6 +74,45 @@ function loadSuggestions() {
     button.addEventListener('click', () => { $('question').value = question; $('question').focus(); });
     list.appendChild(button);
   });
+}
+
+async function loadChats() {
+  try {
+    const { chats } = await api('/api/chats');
+    $('chat-list').innerHTML = chats.length ? chats.map(chat => `<button type="button" data-chat-id="${escapeHtml(chat.id)}" class="chat-link ${chat.id === state.chatId ? 'active' : ''}">${escapeHtml(chat.title)}</button>`).join('') : '<p>No chats yet</p>';
+  } catch (error) { $('chat-list').textContent = error.message; }
+}
+
+function renderHistory(messages) {
+  const panel = $('conversation-history');
+  panel.innerHTML = messages.map(item => `<article class="history-turn"><strong>You asked</strong><p>${escapeHtml(item.question)}</p><strong>Assistant</strong><p>${escapeHtml(item.answer)}</p><div class="history-sources">${item.citations.map(source => `<button type="button" data-doc-id="${escapeHtml(source.document_id)}">[${source.number}] ${escapeHtml(source.title)}</button>`).join('')}</div></article>`).join('');
+  panel.classList.toggle('hidden', !messages.length);
+}
+
+async function loadHistory(excludeId = null) {
+  if (!state.chatId) { renderHistory([]); return; }
+  const data = await api(`/api/chats/${state.chatId}`);
+  renderHistory(data.messages.filter(item => item.id !== excludeId));
+}
+
+async function openChat(id) {
+  state.chatId = id;
+  state.answer = null;
+  $('answer-card').classList.add('hidden');
+  $('question').value = '';
+  showPage('ask');
+  try { await loadHistory(); await loadChats(); }
+  catch (error) { $('conversation-history').textContent = error.message; }
+}
+
+function newChat() {
+  state.chatId = null;
+  state.answer = null;
+  $('question').value = '';
+  $('answer-card').classList.add('hidden');
+  renderHistory([]);
+  showPage('ask');
+  loadChats();
 }
 
 function renderAnswer(result) {
@@ -84,7 +142,13 @@ async function ask(event) {
   if (!question) return;
   $('query-error').classList.add('hidden');
   const button = $('ask-button'); button.disabled = true; button.textContent = 'Finding evidence…';
-  try { renderAnswer(await api('/api/query', 'POST', { question, department: $('department-filter').value })); }
+  try {
+    const result = await api('/api/query', 'POST', { question, department: $('department-filter').value, chat_id: state.chatId });
+    state.chatId = result.chat_id;
+    renderAnswer(result);
+    await loadHistory(result.id);
+    await loadChats();
+  }
   catch (error) { $('query-error').textContent = error.message; $('query-error').classList.remove('hidden'); }
   finally { button.disabled = false; button.innerHTML = 'Ask assistant <span>→</span>'; }
 }
@@ -110,7 +174,9 @@ async function loadDocuments() {
       card.innerHTML = `<div class="doc-top"><span class="doc-icon">▤</span><span class="scope">${escapeHtml(doc.classification)}</span></div><h2>${escapeHtml(doc.title)}</h2><p>${escapeHtml(doc.owner)} · ${escapeHtml(doc.document_type)}</p><div class="doc-footer"><span>${escapeHtml(doc.department)} · ${escapeHtml(doc.status)}</span><button type="button">Open source →</button></div>`;
       card.querySelector('button').addEventListener('click', () => openDocument(doc.id)); grid.appendChild(card);
     });
-    if (!state.documents.length) grid.innerHTML = '<p class="muted">No documents are available to this account.</p>';
+    if (!state.documents.length) grid.innerHTML = state.user.role === 'admin'
+      ? '<div class="empty-library"><strong>Your knowledge bank is empty.</strong><p>Add a shop document to give the assistant information it can cite.</p></div>'
+      : '<div class="empty-library"><strong>No shop documents yet.</strong><p>The assistant can answer from the knowledge bank after the Admin adds documents.</p></div>';
   } catch (error) { grid.textContent = error.message; }
 }
 
@@ -135,12 +201,30 @@ function barRows(items, nameKey) {
 async function loadAnalytics() {
   try {
     const data = await api('/api/analytics');
-    $('metric-grid').innerHTML = metric('Total questions', data.queries) + metric('No-answer rate', `${data.no_answer_rate}%`) + metric('Citation coverage', `${data.citation_coverage}%`) + metric('Average response', `${data.avg_latency_ms} ms`);
+    $('metric-grid').innerHTML = metric('Total questions', data.queries)
+      + metric('Answered questions', data.answered)
+      + metric('No answer', data.queries - data.answered)
+      + metric('Reviewed accuracy', data.reviewed_accuracy_pct === null ? 'Not rated' : `${data.reviewed_accuracy_pct}%`)
+      + metric('Customer feedback', data.feedback_count)
+      + metric('Positive feedback', data.positive_feedback_pct === null ? 'No ratings' : `${data.positive_feedback_pct}%`);
     $('department-bars').innerHTML = barRows(data.documents_by_department, 'department');
     $('route-bars').innerHTML = barRows(data.routes, 'route');
-    $('recent-queries').innerHTML = data.recent_queries.length ? data.recent_queries.map(row => `<div class="table-row"><strong>${escapeHtml(row.question)}</strong><span>${escapeHtml(row.department)}</span><span>${escapeHtml(row.route)}</span><span>${row.no_answer ? 'No answer' : 'Answered'}</span></div>`).join('') : '<p class="muted">No questions yet. Ask the assistant to populate this view.</p>';
+    $('recent-queries').innerHTML = data.recent_queries.length ? data.recent_queries.map(row => `<article class="review-card"><div class="review-header"><strong>${escapeHtml(row.question)}</strong><small>${escapeHtml(row.department)} · ${escapeHtml(row.route)}</small></div><p>${escapeHtml(row.answer)}</p><small>Sources: ${escapeHtml(row.sources || 'None')}</small>${row.no_answer ? '<div class="review-status">No answer to review</div>' : `<div class="review-actions"><span>Admin review: ${escapeHtml(row.verdict || 'Not reviewed')}</span><button type="button" data-query-id="${escapeHtml(row.id)}" data-verdict="correct" class="${row.verdict === 'correct' ? 'selected' : ''}">Correct</button><button type="button" data-query-id="${escapeHtml(row.id)}" data-verdict="incorrect" class="${row.verdict === 'incorrect' ? 'selected' : ''}">Incorrect</button></div>`}</article>`).join('') : '<p class="muted">No questions yet. Ask the assistant to populate this view.</p>';
     $('connector-events').innerHTML = data.connector_calls.length ? data.connector_calls.map(row => `<div class="table-row"><strong>${escapeHtml(row.connector)}</strong><span>${escapeHtml(row.status)}</span><span>${row.result_count} sources</span><span>${row.latency_ms} ms</span></div>`).join('') : '<p class="muted">No connector calls yet.</p>';
   } catch (error) { $('metric-grid').textContent = error.message; }
+}
+
+async function saveReview(event) {
+  const button = event.target.closest('button[data-query-id][data-verdict]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await api('/api/analytics/review', 'POST', { query_id: button.dataset.queryId, verdict: button.dataset.verdict });
+    await loadAnalytics();
+  } catch (error) {
+    alert(error.message);
+    button.disabled = false;
+  }
 }
 
 async function upload(event) {
@@ -166,6 +250,15 @@ async function sendFeedback(rating) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  $('open-profile').addEventListener('click', showProfile);
+  $('back-to-login').addEventListener('click', showLogin);
+  $('profile-form').addEventListener('submit', event => {
+    event.preventDefault();
+    $('profile-form').reset();
+    const status = $('profile-demo-status');
+    status.textContent = 'This is a preview. No account was created, and your details were not saved.';
+    status.classList.remove('hidden');
+  });
   $('login-form').addEventListener('submit', async event => {
     event.preventDefault(); $('login-error').classList.add('hidden');
     try { const { user } = await api('/api/login', 'POST', { email: $('login-email').value, password: $('login-password').value }); showApp(user); }
@@ -179,6 +272,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('close-upload').addEventListener('click', () => $('upload-panel').classList.add('hidden'));
   $('upload-form').addEventListener('submit', upload);
   $('refresh-analytics').addEventListener('click', loadAnalytics);
+  $('recent-queries').addEventListener('click', saveReview);
+  $('new-chat').addEventListener('click', newChat);
+  $('chat-list').addEventListener('click', event => { const button = event.target.closest('button[data-chat-id]'); if (button) openChat(button.dataset.chatId); });
+  $('conversation-history').addEventListener('click', event => { const button = event.target.closest('button[data-doc-id]'); if (button) openDocument(button.dataset.docId); });
   $('close-dialog').addEventListener('click', () => $('source-dialog').close());
   try { const { user } = await api('/api/me'); user ? showApp(user) : showLogin(); }
   catch { showLogin(); }

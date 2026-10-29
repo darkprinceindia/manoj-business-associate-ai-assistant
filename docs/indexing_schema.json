@@ -1,17 +1,28 @@
 {
   "document_metadata": {
     "required": ["title", "department", "classification", "owner", "document_type", "filename", "content"],
-    "department_enum": ["General", "Delivery", "HR", "Sales", "Engineering"],
-    "classification_enum": ["Internal", "HR", "Sales", "Engineering", "Restricted"],
+    "department_enum": ["General", "Products", "Orders", "Support"],
+    "classification_enum": ["Public", "Admin only"],
     "optional": ["effective_date", "expiry_date", "source_system"],
     "status_enum": ["active", "archived"]
   },
   "chunk_record": {
-    "fields": ["id", "document_id", "section", "position", "text", "vector"],
+    "sql_fields": ["id", "document_id", "section", "position", "text", "vector"],
+    "sql_vector_note": "Legacy lexical signature retained for schema compatibility; current semantic search uses Qdrant.",
     "citation_anchor": ["document_id", "section", "position"]
   },
+  "qdrant_point": {
+    "collection": "shop_chunks_bge_small_v1",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "dimensions": 384,
+    "distance": "cosine",
+    "payload_fields": ["id", "document_id", "department", "classification"]
+  },
+  "sql_identity_and_history": {
+    "tables": ["users", "sessions", "chats", "queries", "query_sources", "feedback", "answer_reviews"]
+  },
   "answer_response": {
-    "fields": ["id", "answer", "citations", "route", "department", "confidence", "no_answer", "latency_ms"],
+    "fields": ["id", "chat_id", "answer", "citations", "route", "department", "confidence", "no_answer", "latency_ms"],
     "citation_fields": ["number", "document_id", "title", "section", "snippet", "effective_date", "owner", "classification", "score"]
   }
 }

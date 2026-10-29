@@ -1,15 +1,9 @@
-# Deployment and submission
+# Deployment notes
 
-The live review deployment is [infosys-enterprise-gpt-demo.onrender.com](https://infosys-enterprise-gpt-demo.onrender.com/), a Render Free Python web service in Singapore using the public GitHub repository's `main` branch. Its build command is `pip install -r requirements.txt`, its start command is `python app.py`, and its health check path is `/`. Render sets `PORT`; the service environment sets `HOST=0.0.0.0`, a generated `APP_SECRET`, `DEMO_PASSWORD`, and `GEMINI_API_KEY`. The local `.env` is ignored by Git and is not transferred. If Gemini is unavailable, the app uses cited local extractive answers. The included `render.yaml` is a template for a future Blueprint deployment.
+The [earlier Render service](https://infosys-enterprise-gpt-demo.onrender.com/) still follows the old `main` branch and serves the previous enterprise demo. The `manoj-app` branch is the repository's default for the current project. The included `render.yaml` is a template for a Manoj Business Associate AI assistant service; changing its name does not rename the existing Render service or URL.
 
-**Free-tier limitation:** Render's free web service has an ephemeral filesystem and sleeps after idle time. Its local SQLite database is reseeded from the five sample files after each restart, so uploaded documents, feedback, and analytics history do not persist. A cold start may take about a minute. The review workflow still works after reseeding. For persistent SQLite without a paid disk, an Oracle Cloud Always Free VM is a possible alternative, with more setup and capacity constraints. The standard-library HTTP server is suitable for a controlled capstone demonstration; use a production-grade service stack for real organizational use.
+Before deploying this version to a public interface, configure `HOST=0.0.0.0`, `APP_SECRET`, `ADMIN_PASSWORD`, and a different `CUSTOMER_PASSWORD` in the host environment. `GEMINI_API_KEY` is optional. The server refuses a public bind when the required secrets are absent. The passwords in the README are public demo values; use different private deployment passwords and keep them and API keys out of Git. The local `.env` is ignored.
 
-Submission steps requiring destination access:
+The first start downloads the local FastEmbed model unless it is already cached, so allow extra startup time and network access. Render Free's filesystem is temporary. Local SQLite (`APP_DB`) and local Qdrant (`QDRANT_PATH`) can reset, losing uploaded documents, sessions, chats, feedback, answer reviews, and Dashboard history. An optional remote `QDRANT_URL` and `QDRANT_API_KEY` persist vectors only; SQLite still needs persistent storage. Use persistent SQL storage and a persistent Qdrant instance before relying on the service for ongoing shop use. The current demo-account login and standard-library server should also be upgraded before real public use. See [security notes](security_notes.md).
 
-1. The GitHub repository and Render Free deployment are available, with `.env`, `.venv`, and `data/app.db` excluded from Git.
-2. For persistent uploads and analytics, move the database to durable storage before using this for more than a short demonstration.
-3. The deployed URL and screenshots are in `README.md`; record the walkthrough in `docs/demo_script.md`.
-4. Upload the video to Google Drive and set its access to “Anyone with the link can view”.
-5. Add actual contributor names and roles. Verify all links in the final submission checklist.
-
-Do not publish real internal documents or API keys with the repository or recording.
+For a local demonstration, run the commands in the [README](../README.md). A fresh database automatically indexes the three [IFB manufacturer reference files](../data/ifb_reference) once. The Admin can then upload verified shop documents, or archive a reference without it returning on restart. The current screenshots and brief narration are in the README and [demo script](demo_script.md).

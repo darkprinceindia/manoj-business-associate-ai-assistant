@@ -2,10 +2,15 @@ __pycache__/
 .venv/
 *.pyc
 .env
-data/app.db
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.qdrant/
+data/model-cache/
 data/uploads/
 *.log
 .ppt_build/
 .codex-finalizer/
 .codex-ppt-build/
+.test-tmp/
 deliverables/

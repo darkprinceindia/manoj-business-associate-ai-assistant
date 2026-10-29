@@ -1,4 +1,4 @@
-"""Minimal read-only MCP stdio connector for the curated knowledge index.
+"""Minimal read-only MCP stdio connector for shop product knowledge.
 
 The backend remains the final authorization boundary. This tool receives the
 authenticated user's identity and applies the same access rules in search().
@@ -16,14 +16,15 @@ def respond(request: dict) -> dict | None:
     result = None
     if method == "initialize":
         result = {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}},
-                  "serverInfo": {"name": "curated-knowledge", "version": "1.0.0"}}
+                  "serverInfo": {"name": "product-knowledge", "version": "1.0.0"}}
     elif method == "tools/list":
         result = {"tools": [{"name": "search_curated_knowledge",
-                             "description": "Search permitted, indexed enterprise documents by question and department.",
+                             "description": "Search indexed shop product documents permitted for this account.",
                              "inputSchema": {"type": "object", "properties": {
                                  "question": {"type": "string"}, "user_id": {"type": "string"},
-                                 "department": {"type": "string"}},
-                                 "required": ["question", "user_id"]}}]}
+                                 "department": {"type": "string"},
+                                 "candidates": {"type": "array"}},
+                                 "required": ["question", "user_id", "candidates"]}}]}
     elif method == "tools/call":
         if request.get("params", {}).get("name") != "search_curated_knowledge":
             raise ValueError("Unknown tool")
@@ -32,7 +33,8 @@ def respond(request: dict) -> dict | None:
             user = db.execute("SELECT id,name,email,department,role FROM users WHERE id=?", (args.get("user_id"),)).fetchone()
         if not user:
             raise ValueError("Unknown user")
-        matches = search(args.get("question", ""), user, args.get("department"), limit=5)
+        matches = search(args.get("question", ""), user, args.get("department"),
+                         limit=5, candidates=args.get("candidates", []))
         result = {"content": [{"type": "text", "text": json.dumps({"matches": matches})}], "isError": False}
     else:
         raise ValueError("Unknown method")

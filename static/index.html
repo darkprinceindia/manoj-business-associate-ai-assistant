@@ -4,61 +4,79 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#062b54">
-  <title>Infosys Enterprise GPT · Capstone Demo</title>
-  <link rel="stylesheet" href="/static/style.css?v=infosys-blue">
-  <script src="/static/app.js" defer></script>
+  <title>Manoj Business Associate AI assistant</title>
+  <link rel="stylesheet" href="/static/style.css?v=manoj-shop-2">
+  <script src="/static/app.js?v=ifb-warranty-1" defer></script>
 </head>
 <body>
   <div id="login" class="login-screen hidden">
     <div class="login-card">
-      <div class="login-brand"><span class="infosys-wordmark">Infosys</span><span class="brand-divider"></span><span class="brand-product">ENTERPRISE GPT</span></div>
-      <p class="eyebrow">AI KNOWLEDGE ASSISTANT · CAPSTONE DEMO</p>
-      <h1>Knowledge, ready when you are.</h1>
-      <p class="muted">Sign in to explore an enterprise assistant grounded in approved documents.</p>
+      <div class="login-brand"><span class="brand-wordmark">Manoj Business Associates</span><span class="brand-divider"></span><span class="brand-product">AI ASSISTANT</span></div>
+      <p class="eyebrow">ELECTRONICS SHOP · CUSTOMER HELP</p>
+      <h1>Answers about our business, in one place.</h1>
+      <p class="muted">Sign in to ask about information published by Manoj Business Associates.</p>
       <form id="login-form">
-        <label for="login-email">Demo account</label>
+        <label for="login-email">Account</label>
         <select id="login-email" required>
-          <option value="admin@demo.local">Administrator · all collections</option>
-          <option value="delivery@demo.local">Delivery employee</option>
-          <option value="hr@demo.local">HR employee</option>
-          <option value="engineering@demo.local">Engineering employee</option>
-          <option value="sales@demo.local">Sales employee</option>
+          <option value="customer@demo.local">Customer</option>
+          <option value="admin@demo.local">Admin</option>
         </select>
         <label for="login-password">Password</label>
-        <input id="login-password" type="password" autocomplete="current-password" placeholder="Demo password" required>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="Password" required>
         <button class="primary wide" type="submit">Enter workspace <span>↗</span></button>
       </form>
       <p id="login-error" class="error hidden"></p>
+      <div class="login-footer"><span>New customer?</span><button id="open-profile" type="button">Create a profile</button></div>
+    </div>
+  </div>
+
+  <div id="profile-screen" class="login-screen hidden">
+    <div class="login-card profile-card">
+      <div class="login-brand"><span class="brand-wordmark">Manoj Business Associates</span><span class="brand-divider"></span><span class="brand-product">AI ASSISTANT</span></div>
+      <p class="eyebrow">CUSTOMER PROFILE</p>
+      <h1>Create your profile</h1>
+      <p class="muted">A preview of the customer sign-up form. Registration is coming later; details entered here are not sent or saved.</p>
+      <form id="profile-form" autocomplete="off">
+        <label for="profile-name">Full name</label><input id="profile-name" type="text" autocomplete="off" placeholder="Your name" required>
+        <label for="profile-email">Email address</label><input id="profile-email" type="email" autocomplete="off" placeholder="you@example.com" required>
+        <label for="profile-phone">Phone number</label><input id="profile-phone" type="tel" autocomplete="off" placeholder="Your phone number" required>
+        <label for="profile-city">City (optional)</label><input id="profile-city" type="text" autocomplete="off" placeholder="Your city">
+        <button class="primary wide" type="submit">Preview profile <span>→</span></button>
+      </form>
+      <p id="profile-demo-status" class="profile-status hidden" role="status"></p>
+      <div class="login-footer"><span>Already using the demo?</span><button id="back-to-login" type="button">Back to sign in</button></div>
     </div>
   </div>
 
   <div id="app" class="app-shell hidden">
     <aside class="sidebar">
-      <div class="logo"><div><strong class="infosys-wordmark sidebar-wordmark">Infosys</strong><span>ENTERPRISE GPT · CAPSTONE</span></div></div>
+      <div class="logo"><div><strong class="brand-wordmark sidebar-wordmark">Manoj Business Associates</strong><span>AI ASSISTANT</span></div></div>
       <div class="sidebar-label">WORKSPACE</div>
       <nav id="nav">
         <button data-page="ask" class="nav-item active"><span class="nav-icon">⌕</span> Ask assistant</button>
         <button data-page="knowledge" class="nav-item"><span class="nav-icon">▤</span> Knowledge library</button>
         <button data-page="connectors" class="nav-item"><span class="nav-icon">⇄</span> Connectors</button>
-        <button data-page="analytics" class="nav-item admin-only"><span class="nav-icon">▥</span> Quality analytics</button>
+        <button data-page="analytics" class="nav-item admin-only"><span class="nav-icon">▥</span> Admin Dashboard</button>
       </nav>
+      <div class="chat-panel"><div class="chat-panel-heading"><span>YOUR CHATS</span><button id="new-chat" type="button">+ New</button></div><div id="chat-list"></div></div>
       <div class="sidebar-bottom">
-        <div class="security-note"><span>◈</span><div><strong>Permission-aware</strong><small>Answers use only sources you can access.</small></div></div>
+        <div class="security-note"><span>◈</span><div><strong>Source-backed answers</strong><small>Answers use published shop information.</small></div></div>
         <button id="user-button" class="user-button"><span id="avatar">A</span><span><strong id="user-name"></strong><small id="user-dept"></small></span><span class="logout-symbol">↪</span></button>
       </div>
     </aside>
 
     <main class="main">
-      <header class="topbar"><div class="topbar-brand"><span class="infosys-wordmark top-wordmark">Infosys</span><span class="topbar-separator">/</span><span class="top-product">AI Knowledge Assistant</span><span class="demo-tag">CAPSTONE DEMO</span></div><div class="topbar-right"><span class="topbar-status"><span class="online-dot"></span> KNOWLEDGE SPACE</span><div id="top-role" class="role-badge"></div></div></header>
+      <header class="topbar"><div class="topbar-brand"><span class="brand-wordmark top-wordmark">Manoj Business Associates</span><span class="topbar-separator">/</span><span class="top-product">AI Assistant</span><span class="demo-tag">ELECTRONICS</span></div><div class="topbar-right"><span class="topbar-status"><span class="online-dot"></span> SHOP KNOWLEDGE</span><div id="top-role" class="role-badge"></div></div></header>
 
       <section id="page-ask" class="page active">
         <div class="page-wrap ask-wrap">
-          <div class="hero"><p class="eyebrow">INFOSYS ENTERPRISE GPT · YOUR KNOWLEDGE, CONNECTED</p><h1>What would you like<br>to <em>know?</em></h1><p>Ask across approved guides, policies, SOPs, and runbooks. Every answer points back to its source.</p></div>
+          <div class="hero"><p class="eyebrow">MANOJ BUSINESS ASSOCIATE AI ASSISTANT</p><h1>How can we <em>help?</em></h1><p>Ask about our electronics business using the information in the shop knowledge bank. Answers show their source when available.</p></div>
+          <div id="conversation-history" class="conversation-history hidden"></div>
           <div class="query-card">
             <form id="query-form">
               <label class="sr-only" for="question">Your question</label>
-              <textarea id="question" rows="3" placeholder="Ask a question about an approved process or policy..." required></textarea>
-              <div class="query-actions"><div class="select-wrap"><span>Collection</span><select id="department-filter"><option>All</option><option>General</option><option>Delivery</option><option>HR</option><option>Sales</option><option>Engineering</option></select></div><button class="primary" type="submit" id="ask-button">Ask assistant <span>→</span></button></div>
+              <textarea id="question" rows="3" placeholder="Ask about products, orders, or support..." required></textarea>
+              <div class="query-actions"><div class="select-wrap"><span>Topic</span><select id="department-filter"><option>All</option><option>General</option><option>Products</option><option>Orders</option><option>Support</option></select></div><button class="primary" type="submit" id="ask-button">Ask assistant <span>→</span></button></div>
             </form>
           </div>
           <div class="suggestions"><p>TRY A QUESTION</p><div id="suggestion-list"></div></div>
@@ -67,11 +85,11 @@
         </div>
       </section>
 
-      <section id="page-knowledge" class="page"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">SOURCE OF TRUTH</p><h1>Knowledge library</h1><p>Approved content, with ownership and access scope visible.</p></div><button id="show-upload" class="primary admin-only">+ Add document</button></div><div id="document-grid" class="document-grid"></div><div id="upload-panel" class="panel hidden admin-only"><div class="panel-title"><h2>Add an approved document</h2><button id="close-upload" class="icon-button" aria-label="Close upload">×</button></div><p class="muted">TXT, Markdown, DOCX, or PDF · up to 5 MB · required metadata is indexed with every passage.</p><form id="upload-form"><div class="form-grid"><label>Title<input name="title" required></label><label>File<input name="file" type="file" accept=".txt,.md,.docx,.pdf" required></label><label>Department<select name="department"><option>General</option><option>Delivery</option><option>HR</option><option>Sales</option><option>Engineering</option></select></label><label>Access classification<select name="classification"><option>Internal</option><option>HR</option><option>Sales</option><option>Engineering</option><option>Restricted</option></select></label><label>Source owner<input name="owner" required></label><label>Document type<input name="document_type" value="Guide" required></label><label>Effective date<input name="effective_date" type="date"></label><label>Expiry date<input name="expiry_date" type="date"></label></div><button class="primary" type="submit">Validate and index <span>→</span></button><span id="upload-message"></span></form></div></div></section>
+      <section id="page-knowledge" class="page"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">SHOP INFORMATION</p><h1>Knowledge library</h1><p>Documents the assistant can use to answer questions.</p></div><button id="show-upload" class="primary admin-only">+ Add document</button></div><div id="document-grid" class="document-grid"></div><div id="upload-panel" class="panel hidden admin-only"><div class="panel-title"><h2>Add a shop document</h2><button id="close-upload" class="icon-button" aria-label="Close upload">×</button></div><p class="muted">TXT, Markdown, DOCX, or PDF · up to 5 MB. Choose Public for customer-facing information.</p><form id="upload-form"><div class="form-grid"><label>Title<input name="title" required></label><label>File<input name="file" type="file" accept=".txt,.md,.docx,.pdf" required></label><label>Topic<select name="department"><option>General</option><option>Products</option><option>Orders</option><option>Support</option></select></label><label>Visibility<select name="classification"><option>Public</option><option>Admin only</option></select></label><label>Source owner<input name="owner" value="Manoj Business Associates" required></label><label>Document type<input name="document_type" value="Guide" required></label><label>Effective date<input name="effective_date" type="date"></label><label>Expiry date<input name="expiry_date" type="date"></label></div><button class="primary" type="submit">Add to knowledge bank <span>→</span></button><span id="upload-message"></span></form></div></div></section>
 
-      <section id="page-connectors" class="page"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">CONTROLLED TOOL ROUTING</p><h1>Connectors</h1><p>Query routing is visible and every connector result passes the access filter.</p></div></div><div id="connector-grid"></div><div class="info-panel"><h2>How routing works</h2><div class="flow"><span>Question classification</span><b>→</b><span>MCP tool or local index</span><b>→</b><span>Permission filter</span><b>→</b><span>Cited answer</span></div><p>HR policy queries demonstrate a real read-only MCP stdio tool call. Other queries use the local hybrid index. Connector calls, latency, and failures are logged for administrator review.</p></div></div></section>
+      <section id="page-connectors" class="page"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">SEARCH ROUTES</p><h1>Connectors</h1><p>See how a question reaches the right shop documents.</p></div></div><div id="connector-grid"></div><div class="info-panel"><h2>How routing works</h2><div class="flow"><span>Question</span><b>→</b><span>Qdrant vectors + SQLite search</span><b>→</b><span>MCP product tool or local route</span><b>→</b><span>Cited answer</span></div><p>Uploaded documents are split into chunks and embedded for vector search in Qdrant. SQLite stores the document, keywords, accounts, and chats. Product questions use a read-only MCP tool; the backend checks visibility before answering.</p></div></div></section>
 
-      <section id="page-analytics" class="page admin-only"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">QUALITY OPERATIONS</p><h1>Knowledge health</h1><p>See usage, source coverage, and areas needing review.</p></div><button id="refresh-analytics" class="secondary">Refresh ↻</button></div><div id="metric-grid" class="metric-grid"></div><div class="analytics-columns"><div class="panel"><h2>Documents by collection</h2><div id="department-bars"></div></div><div class="panel"><h2>Retrieval routes</h2><div id="route-bars"></div></div></div><div class="panel"><h2>Recent questions</h2><div id="recent-queries"></div></div><div class="panel"><h2>Connector events</h2><div id="connector-events"></div></div></div></section>
+      <section id="page-analytics" class="page admin-only"><div class="page-wrap"><div class="section-header"><div><p class="eyebrow">ADMIN ONLY</p><h1>Dashboard</h1><p>Questions answered, customer feedback, and answer reviews.</p></div><button id="refresh-analytics" class="secondary">Refresh ↻</button></div><div id="metric-grid" class="metric-grid"></div><p class="dashboard-note">Reviewed accuracy counts only answered questions marked Correct or Incorrect by an admin. It is not a measure of unreviewed answers.</p><div class="analytics-columns"><div class="panel"><h2>Documents by topic</h2><div id="department-bars"></div></div><div class="panel"><h2>Search routes</h2><div id="route-bars"></div></div></div><div class="panel"><h2>Recent answers · mark accuracy</h2><p class="muted">Compare an answer with its cited shop source before marking it.</p><div id="recent-queries"></div></div><div class="panel"><h2>Connector events</h2><div id="connector-events"></div></div></div></section>
     </main>
   </div>
   <dialog id="source-dialog"><div class="dialog-head"><div><p class="eyebrow">APPROVED SOURCE</p><h2 id="dialog-title"></h2></div><button id="close-dialog" class="icon-button" aria-label="Close preview">×</button></div><div id="dialog-meta" class="dialog-meta"></div><pre id="dialog-content"></pre></dialog>

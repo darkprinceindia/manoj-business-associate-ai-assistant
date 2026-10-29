@@ -11,6 +11,14 @@ with tempfile.TemporaryDirectory() as directory:
     import app
 
     k.init_db()
+    with k.connect() as db:
+        customer = dict(db.execute("SELECT id,name,email,department,role FROM users WHERE id='customer'").fetchone())
+    if k.list_documents(customer) or not app.answer_query("What kind of business is Manoj Business Associates?", customer)["no_answer"]:
+        raise SystemExit("Empty knowledge bank did not take the no-answer path")
+    k.create_document({"title": "About Manoj Business Associates", "department": "General",
+                       "classification": "Public", "owner": "Evaluation", "document_type": "Guide",
+                       "filename": "evaluation-shop.md",
+                       "content": "# About Manoj Business Associates\n## The business\nManoj Business Associates is a shop that deals in electronics items. Customers can ask this assistant about information the shop adds to its knowledge bank.\n## Details to confirm\nThis guide does not list specific brands, models, prices, current stock, or return rules. Ask the shop to confirm details that are not published."}, "system")
     with (k.ROOT / "docs" / "evaluation_queries.csv").open(newline="", encoding="utf-8") as file:
         cases = list(csv.DictReader(file))
     passed = 0
@@ -26,4 +34,5 @@ with tempfile.TemporaryDirectory() as directory:
         print(f"{'PASS' if outcome else 'FAIL'} {case['role']}: {case['question']}")
         print(f"  route={result['route']} sources={titles} answer={result['answer'][:180]}")
     print(f"\n{passed}/{len(cases)} evaluation cases passed")
+    k.vectors.close_all()
     raise SystemExit(0 if passed == len(cases) else 1)

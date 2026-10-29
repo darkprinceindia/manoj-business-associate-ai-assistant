@@ -1,6 +1,0 @@
-file,department,classification,owner,document_type,effective_date,expiry_date,source_system
-sample_sops/delivery-escalation.md,Delivery,Internal,Delivery Operations,SOP,2026-01-01,,Curated sample collection
-sample_hr_policies/leave-policy.md,HR,HR,HR Operations,Policy,2026-01-01,,Curated sample collection
-sample_engineering_guides/incident-runbook.md,Engineering,Engineering,Platform Engineering,Runbook,2026-01-01,,Curated sample collection
-sample_sales_assets/approved-positioning.md,Sales,Sales,Sales Enablement,Playbook,2026-01-01,,Curated sample collection
-sample_project_manuals/onboarding-manual.md,General,Internal,Project Management Office,Manual,2026-01-01,,Curated sample collection

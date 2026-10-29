@@ -1,3 +1,3 @@
-# The application runs on Python 3.11+ without third-party packages.
-# Install this optional dependency to ingest PDF files:
+# PDF text extraction, local embeddings, and Qdrant vector search.
 pypdf>=5,<7
+qdrant-client[fastembed]>=1.14.2,<2

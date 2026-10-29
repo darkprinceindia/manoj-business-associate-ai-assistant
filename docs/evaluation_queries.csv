@@ -1,7 +1,5 @@
 role,question,expected_source,expected_behavior
-admin,How do we escalate a P1 delivery incident?,Delivery escalation SOP,cited answer
-hr,What is the annual leave request process?,Employee leave policy,cited MCP answer
-engineering,When should an API deployment be rolled back?,API incident runbook,cited answer
-sales,What requires review before a client proposal?,Approved AI services positioning,cited answer
-delivery,How many annual leave days do employees receive?,none,no answer with no HR citation
-admin,What is the cafeteria breakfast menu on Mars?,none,no answer
+customer,What kind of business is Manoj Business Associates?,About Manoj Business Associates,cited answer
+admin,What kind of business is Manoj Business Associates?,About Manoj Business Associates,cited answer
+customer,What is the price of a specific laptop model?,none,no answer
+customer,Does the shop sell Mars rockets?,none,no answer

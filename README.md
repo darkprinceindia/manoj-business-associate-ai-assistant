@@ -1,198 +1,178 @@
-# Infosys AI Knowledge Assistant (Enterprise GPT)
+# Manoj Business Associate AI assistant
 
 ## Project overview
 
-A capstone prototype for governed document question answering. Employees ask natural-language questions and receive answers with source citations. Administrators can upload approved documents, inspect connector activity, and review quality signals. The interface uses Infosys-inspired styling for the demonstration and is not an official Infosys product.
+A document-backed assistant for Manoj Business Associates, an electronics items shop. Customers ask about information the shop has published. An Admin adds documents and reviews questions, feedback, and answer quality in a Dashboard. The assistant cites its source when the knowledge bank supports an answer and says when it lacks enough information.
 
-## Business problem
+## Business problem and product goal
 
-Policies, procedures, and runbooks can be scattered across files and teams. Employees need to find the relevant passage, check its source, and avoid relying on material outside their access scope.
+Customers may need answers about products, orders, or support while shop information is scattered across files. The goal is to provide a simple question box with source-backed answers, a way for the Admin to update the knowledge bank, and a Dashboard that shows where answers need review. The app should not invent prices, stock, warranty terms, or return rules.
 
-## Product goal
+## Current status and live demo
 
-Answer from permitted documents with a citation, or clearly say when the available evidence is insufficient.
+The current version is on the `manoj-app` branch, which is the repository's default branch. The [earlier Render deployment](https://infosys-enterprise-gpt-demo.onrender.com/) still follows the old `main` branch and shows the previous enterprise demo until this version is deployed with its required environment variables.
 
-## Live demo
-
-[infosys-enterprise-gpt-demo.onrender.com](https://infosys-enterprise-gpt-demo.onrender.com/) runs on Render Free. Select a demo account and request the shared password from the project owner.
-
-> **Demo data:** The included documents are fictional examples created for this project. They are not Infosys policies or internal records.
-
-![Assistant home screen with the Infosys-inspired interface](assets/screenshots/01_assistant_home.png)
+The app starts with three Public IFB manufacturer warranty references: a 3-star AC example, a 5-star AC example, and the shared Super Warranty conditions. The source files are in [data/ifb_reference](data/ifb_reference) and are indexed once on first startup. Admin can add or archive documents afterward. Questions without supporting documents receive an insufficient-evidence answer.
 
 ## Screenshots
 
-| Cited answer | Source preview |
-| :---: | :---: |
-| ![HR question answered with a source citation](assets/screenshots/02_cited_hr_answer.png) | ![Preview of a cited passage](assets/screenshots/03_source_preview.png) |
+| Sign-in | Customer profile preview |
+| --- | --- |
+| ![Customer and Admin login](assets/screenshots/11_manoj_login.png) | ![Customer profile preview](assets/screenshots/18_manoj_profile_preview.png) |
 
-| Document ingestion | Quality analytics |
-| :---: | :---: |
-| ![Administrator document upload](assets/screenshots/05_document_ingestion.png) | ![Quality analytics dashboard](assets/screenshots/07_quality_analytics.png) |
+| IFB knowledge library | Cited warranty answer |
+| --- | --- |
+| ![Three IFB warranty references in the knowledge library](assets/screenshots/19_ifb_knowledge_library.png) | ![Customer question answered with IFB warranty citations](assets/screenshots/20_ifb_cited_warranty_answer.png) |
 
-The [employee access screenshot](assets/screenshots/10_employee_access_boundary.png) shows how a Delivery account is kept outside HR-only material.
+| Admin document upload | Admin Dashboard |
+| --- | --- |
+| ![Admin upload form for TXT, Markdown, DOCX, and PDF files](assets/screenshots/21_ifb_admin_upload.png) | ![Admin Dashboard with IFB question metrics](assets/screenshots/22_ifb_admin_dashboard.png) |
+
+## Roles and key features
+
+| Role | Permissions |
+| --- | --- |
+| Customer | Ask questions, read Public documents and citations, and rate an answer. |
+| Admin | Also upload or archive documents, read Admin-only documents, view the Dashboard, and mark answered questions Correct or Incorrect. |
+
+The UI hides Admin controls from Customers; the backend checks permissions again on API requests. Admin and Customer use separate passwords. The Customer profile page is a visual preview: submitting it sends and saves nothing, and does not create an account.
+
+## Demo sign-in
+
+| Role | Account | Password |
+| --- | --- | --- |
+| Customer | `customer@demo.local` | `Customer123!` |
+| Admin | `admin@demo.local` | `Almax!23` |
+
+These are public demo credentials. Replace both passwords before using real shop or customer data in a shared deployment.
+
+The app supports TXT, Markdown, DOCX, and text-readable PDF upload; document indexing; duplicate detection; product-question routing through a read-only local MCP tool; optional Gemini answers; a local cited fallback; and a clear no-answer path.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    User["Employee or administrator"] --> UI["Browser UI"]
-    UI --> API["Python API<br/>sessions and roles"]
-    API --> Router["Classify question"]
-    Router -->|"HR"| MCP["MCP connector"]
-    Router -->|"Other"| Search["Approved passage search"]
-    MCP --> Search
-    Store["SQLite + FTS5<br/>documents and chunks"] --> Search
-    Search --> Answer["Cited answer<br/>Gemini or local fallback"]
-    API --> Intake["Admin upload<br/>extract and index"]
-    Intake --> Store
-    API --> Signals["Audit and quality records"]
-```
+    Customer or Admin -> browser -> app.py API -> SQLite users/sessions/chats
+                                      |
+                             knowledge.py role checks
+                                      |
+                Qdrant chunk embeddings + SQLite FTS5 terms
+                                      |
+                   product MCP tool or local retrieval
+                                      |
+                            permitted passages
+                                      |
+                         Gemini or local cited answer
+                                      |
+                  feedback and Admin review -> Dashboard
 
-The MCP tool is a bundled local connector. Gemini receives only retrieved passages that passed the access filter. The local hashed vectors are lexical features, not semantic embeddings. See the [architecture notes](docs/architecture.md).
+The browser sends JSON requests to app.py. SQLite holds accounts, sessions, chats, document text and metadata, questions, feedback, and reviews. Qdrant stores chunk embeddings for semantic retrieval; SQLite FTS5 adds keyword ranking. Product questions demonstrate an MCP tool call against the same knowledge bank. The model, when configured, receives only passages allowed for the signed-in role. See [architecture notes](docs/architecture.md).
 
 ## AI workflow
 
-An administrator upload is validated, converted to text, split into sections and passages, then indexed in SQLite FTS5. For a question, the backend chooses the read-only MCP search tool for HR topics or local search for other topics. It filters retrieved passages by role, department, and document status before building the answer. Gemini may phrase an answer from those permitted passages when configured; otherwise the application extracts cited source sentences.
+1. The Admin uploads a shop document and chooses its topic and visibility.
+2. The backend extracts text, splits it into overlapping passages, embeds each passage with FastEmbed's `BAAI/bge-small-en-v1.5` model, and stores the 384-dimensional embeddings in Qdrant. It also indexes passage text in SQLite FTS5.
+3. A Customer asks a question. Simple keyword rules select Products, Orders, Support, or General, unless the user selects a topic.
+4. The question gets an embedding. Qdrant finds nearby passage vectors, while SQLite FTS5 helps rank keyword matches. Search keeps only active, unexpired, permitted passages. Product questions may use the local MCP tool; the backend rechecks its results.
+5. If the passages are too weak, the assistant says it cannot confirm the answer. Otherwise Gemini may write a cited answer, with a local sentence-selection fallback.
+6. The question, route, citations, customer feedback, and Admin review feed the Dashboard.
 
-```mermaid
-flowchart LR
-    Q["Question"] --> R["Classify and route"]
-    R --> K["Retrieve candidate passages"]
-    K --> P["Apply access and freshness checks"]
-    P --> E{"Enough evidence?"}
-    E -->|"No"| N["Explain that no supported answer was found"]
-    E -->|"Yes"| C["Select up to three cited passages"]
-    C --> M{"Gemini answer with valid citations?"}
-    M -->|"Yes"| G["Return model-backed answer"]
-    M -->|"No or unavailable"| L["Return extractive answer"]
-```
+The retrieval signal is a hybrid search ranking score, not a probability of correctness. Reviewed accuracy is the percentage of reviewed answered questions marked Correct by an Admin. Unreviewed answers are excluded.
 
-## How to run locally
+## Data sources
 
-Requires Python 3.11 or newer. No frontend build step is needed.
+The local bank contains three summaries in [data/ifb_reference](data/ifb_reference), based on IFB's official pages for the [3-star CI1832D223GN1](https://www.ifbappliances.com/ci1832d223gn1), [5-star CI1852D223GN1](https://www.ifbappliances.com/ci1852d223gn1), and [AC Super Warranty terms](https://www.ifbappliances.com/ac-super-warranty-terms-and-conditions). Both example product pages display five years of machine cover and ten years for the compressor. IFB's terms say the five-year cover applies only to products purchased on or after 15 May 2026 and units manufactured from January 2026, with service and other conditions. These references do not establish that this shop stocks either model.
 
-```powershell
-git clone https://github.com/darkprinceindia/infosys-ai-knowledge-assistant-enterprise-gpt.git
-cd infosys-ai-knowledge-assistant-enterprise-gpt
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe app.py
-```
+The three shipped IFB references are indexed once for each database; archiving one will not bring it back on the next restart. Admin uploads remain available across local restarts, and the Admin can add more TXT, Markdown, DOCX, and text-readable PDF documents from Knowledge library. Earlier enterprise demo documents are archived and removed from active vector retrieval when an existing database is migrated; previous chat and review records are kept.
 
-Open **http://127.0.0.1:8000**. On later runs, only the `cd` and final `app.py` commands are needed. The login screen offers administrator and employee accounts for Delivery, HR, Engineering, and Sales. Set `DEMO_PASSWORD` in `.env` or the host's environment to control the shared demo password; the login page does not display it.
+### Add another document
 
-For macOS/Linux, activate the virtual environment and run `python app.py` with the same environment variables. `pypdf` is only required for PDF uploads; TXT, Markdown, and DOCX work with the standard library.
+1. Sign in as Admin, open **Knowledge library**, and select **+ Add document**.
+2. Enter a title and choose a TXT, Markdown, DOCX, or text-readable PDF file (up to 5 MB). Select a topic and **Public** visibility if Customers should be able to use it.
+3. Select **Add to knowledge bank**. The backend extracts text, creates searchable chunks and embeddings, and adds the document to the library. Customers can then ask about the new information. Scanned image-only PDFs need OCR before upload.
 
-## Demo in five minutes
+For the current IFB references, try: “What warranty does the IFB CI1832D223GN1 3-star AC have?”, “What warranty does the IFB CI1852D223GN1 5-star AC have?”, or “What conditions apply to IFB AC five-year Super Warranty?”
 
-1. Sign in as **Administrator**. Ask “What is the annual leave request process?” The answer uses the **MCP curated knowledge** route and shows a citation.
-2. Open its source card to inspect the approved passage and metadata.
-3. Open **Knowledge library** to inspect the five seeded collections and upload a new TXT, MD, DOCX, or PDF file with department, classification, owner, and dates.
-4. Open **Quality analytics** to see the query, route, no-answer rate, citation coverage, and connector event.
-5. Sign out and use **Delivery employee**. Ask the same HR question. The assistant must decline because HR material is outside that account's access scope.
+## Tools and technologies
 
-See [docs/demo_script.md](docs/demo_script.md) for a recording script and narration.
-
-## Key features
-
-- Upload validation, duplicate detection, DOCX/PDF/TXT/MD extraction, section-aware chunking, source metadata, and SQLite indexing.
-- Permission-aware search with local lexical vectors and term overlap, filtering expired or archived documents.
-- Query classification and a real read-only MCP stdio JSON-RPC tool route for HR queries, with connector events and a local fallback on connector failure.
-- Source-grounded answers with numbered citations; optional Gemini synthesis when `GEMINI_API_KEY` is configured. Without a key, the app uses transparent extractive synthesis.
-- No-answer behavior, source preview, feedback capture, role-based screens, audit events, and quality analytics.
-- Five fictional sample documents covering delivery, HR, engineering, sales, and project onboarding.
-
-## Data sources used
-
-The repository seeds five fictional Markdown documents and their access metadata from [`data/source_metadata.csv`](data/source_metadata.csv). They are examples for testing the workflow, not company policies.
-
-| Topic | Seed document |
-| --- | --- |
-| Delivery incidents | [Delivery escalation SOP](data/sample_sops/delivery-escalation.md) |
-| Leave requests | [Employee leave policy](data/sample_hr_policies/leave-policy.md) |
-| API incidents | [API incident runbook](data/sample_engineering_guides/incident-runbook.md) |
-| Client proposals | [Approved AI services positioning](data/sample_sales_assets/approved-positioning.md) |
-| New projects | [Project onboarding manual](data/sample_project_manuals/onboarding-manual.md) |
-
-Administrators can also add approved TXT, Markdown, DOCX, or PDF files through the Knowledge library. Uploads are indexed with owner, department, classification, and dates.
-
-## Tools and technologies used
-
-| Part | Technology | Purpose |
+| Part | Technology | Job |
 | --- | --- | --- |
-| Frontend | HTML, CSS, JavaScript in `static/` | Login, questions, citations, library, analytics. |
-| Backend | Python standard-library HTTP server in `app.py` | Sessions, API routes, query workflow, access checks. |
-| Knowledge layer | `knowledge.py` and SQLite FTS5 | Intake, metadata, lexical retrieval, citations, quality records. |
-| Connector | `mcp_server.py` over stdio JSON-RPC | Read-only curated-knowledge route for HR questions. |
-| Optional LLM | Gemini API | Synthesize an answer from approved retrieved passages. |
-| PDF intake | `pypdf` | Extract text from uploaded PDFs. |
+| Frontend | HTML, CSS, JavaScript in static/ | Login, assistant, library, connector view, Dashboard. |
+| Backend | Python standard-library HTTP server in app.py | Sessions, roles, API, query workflow, reviews. |
+| SQL database | SQLite and FTS5 in knowledge.py | Accounts, token hashes, chats, questions, document records, feedback, reviews, and keyword search. |
+| Embedding model | FastEmbed, `BAAI/bge-small-en-v1.5` | Local 384-dimensional embeddings for document passages and questions. |
+| Vector database | Qdrant | Store and search passage embeddings. Local persistent mode by default; remote Qdrant is optional. |
+| Connector | mcp_server.py over stdio JSON-RPC | Read-only product search route. |
+| Optional answer model | Gemini API | Compose from permitted passages. |
+| PDF intake | pypdf | Extract text from PDFs. |
 
-## API at a glance
+An old lexical-vector column remains in SQLite for compatibility with existing databases; current retrieval uses Qdrant embeddings and FTS5.
 
-The browser calls JSON endpoints in `app.py`. Login sets an `HttpOnly` session cookie; protected routes use that cookie and apply the signed-in user's role and department.
+## Run locally
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/login` | Sign in and start a session. |
-| `GET` | `/api/me` | Return the current user. |
-| `POST` | `/api/query` | Ask a question and receive an answer with citations. |
-| `GET` | `/api/documents` and `/api/documents/{id}` | List permitted documents and preview a source. |
-| `POST` | `/api/documents/upload` | Validate and index a document (administrator only). |
-| `GET` | `/api/connectors` | Show the configured MCP connector. |
-| `GET` | `/api/analytics` | Return usage and quality metrics (administrator only). |
+Requires Python 3.11 or newer.
 
-The [full API reference](docs/api_documentation.md) includes the remaining endpoints, access rules, request and response fields, and error codes.
+    git clone https://github.com/darkprinceindia/manoj-business-associate-ai-assistant.git
+    cd manoj-business-associate-ai-assistant
+    python -m venv .venv
+    ./.venv/Scripts/python.exe -m pip install -r requirements.txt
+    Copy-Item .env.example .env
+    # .env.example contains the demo passwords shown above. Change them for shared use.
+    ./.venv/Scripts/python.exe app.py
+
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Choose Customer or Admin and use the demo credentials above. The Admin opens the Dashboard after login; the Customer opens Ask assistant. “Create a profile” on the sign-in page previews a future form without making an account.
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and set values before a shared deployment. `.env` is ignored by Git.
-
 | Variable | Purpose |
 | --- | --- |
-| `APP_SECRET` | HMAC signing key for 12-hour session cookies. Required for a public bind. |
-| `DEMO_PASSWORD` | Password for seeded demo accounts. Required for a public bind. |
-| `GEMINI_API_KEY` | Optional model-backed synthesis; never sent to the browser. |
-| `GEMINI_MODEL` | Gemini model name, default `gemini-flash-latest`. |
-| `APP_DB` | SQLite database path, default `data/app.db`. |
-| `HOST`, `PORT` | Listening address and port; default `127.0.0.1:8000`. |
+| APP_SECRET | Signs 12-hour session cookies; required for a public bind. |
+| ADMIN_PASSWORD | Admin password; required for a public bind. |
+| CUSTOMER_PASSWORD | Customer demo password; required for a public bind. |
+| GEMINI_API_KEY | Optional Gemini key, kept server-side. |
+| GEMINI_MODEL | Optional model name; defaults to gemini-flash-latest. |
+| APP_DB | SQLite file path; defaults to data/app.db. |
+| QDRANT_PATH | Optional local Qdrant directory; defaults to the APP_DB filename with `.qdrant` extension. |
+| QDRANT_URL, QDRANT_API_KEY | Optional remote Qdrant endpoint and credential. |
+| QDRANT_COLLECTION | Optional collection name; defaults to `shop_chunks_bge_small_v1`. |
+| HOST, PORT | Bind address and port; default 127.0.0.1:8000. |
 
-The model request sends only passages that passed the permission filter. Avoid putting sensitive real company documents into a demo deployment without an approved identity provider, data retention policy, and security review.
+The old DEMO_PASSWORD remains a local Admin-password fallback during migration. The current local demo uses it for the Admin credential above. Set separate private passwords before any shared deployment with real data.
 
-The live Render Free service uses this public GitHub repository, Python 3.12, a Singapore instance, and the build/start commands in the [deployment guide](docs/deployment.md). The dashboard stores `APP_SECRET`, `DEMO_PASSWORD`, and `GEMINI_API_KEY` as environment variables; the local `.env` file is not transferred. Render Free uses an ephemeral filesystem: sample documents reseed after a restart, but uploads, feedback, and analytics history do not persist. The included [`render.yaml`](render.yaml) is a template for future Blueprint deployments.
+## API details
 
-## Project layout
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | /api/login, /api/logout | Start or end a session. |
+| GET | /api/me | Current signed-in role. |
+| POST | /api/query | Return a cited answer or insufficient-evidence message. |
+| GET | /api/chats, /api/chats/{id} | List your chats and read your question/answer history. |
+| GET | /api/documents, /api/documents/{id} | List and preview permitted documents. |
+| POST | /api/documents/upload, /api/documents/archive | Admin document actions. |
+| POST | /api/feedback | Customer answer rating. |
+| GET | /api/analytics | Admin Dashboard data. |
+| POST | /api/analytics/review | Admin Correct/Incorrect review of an answered question. |
+| GET | /api/connectors | Configured connector metadata. |
 
-```text
-app.py                 HTTP API, login, routing, answer workflow
-knowledge.py           ingestion, indexing, permission checks, retrieval, analytics
-mcp_server.py          read-only MCP stdio connector
-static/                employee and administrator web interface
-data/sample_*/         fictional seed documents
-tests/                 workflow and access-control tests
-docs/                  architecture, APIs, demo, evaluation, deployment notes
-```
+See the [full API reference](docs/api_documentation.md).
 
 ## Evaluation approach
 
-The [six evaluation questions](docs/evaluation_queries.csv) cover a cited answer from each main department, an HR access denial for a Delivery user, and an unsupported question that should receive no citation. Review each result for the expected source, route, citation, and access behavior. This is a small functional check of the prototype, not a measured accuracy benchmark for real enterprise content.
+The [curated questions](docs/evaluation_queries.csv) check a cited shop answer and unsupported questions after `evaluate.py` adds a temporary evaluation document. Run:
 
-Run the automated workflow and access-control tests locally:
+    ./.venv/Scripts/python.exe -m unittest discover -s tests -v
+    ./.venv/Scripts/python.exe tests/http_smoke.py
+    ./.venv/Scripts/python.exe evaluate.py
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
-
-The tests use a temporary database and verify the MCP answer route, citations, restricted-source behavior, no-answer handling, seeded content, duplicate detection, and analytics.
+Tests cover both roles, vector retrieval, visibility, upload, product MCP routing, SQL chat history, revocable sessions, citations, feedback, and Admin review. Dashboard accuracy depends on human review and is not a measured accuracy benchmark for all future documents.
 
 ## Known limitations
 
-- Retrieval uses local hashed lexical vectors and SQLite FTS5, not semantic model embeddings or a vector database.
-- The MCP tool is a bundled read-only demonstration over the seeded knowledge bank, not a connection to a live company system.
-- Demo accounts and a shared password are for review; enterprise use would need managed identity, document approvals, stronger evaluation, and security and privacy review.
-- Render Free storage is temporary: uploaded files, feedback, and analytics history can reset when the service restarts.
+- There is one shared demo Customer account and one Admin account. A public store needs suitable customer identity and abuse controls.
+- A fresh installation has only the three IFB manufacturer references above. The business must supply and verify its own catalog, prices, policies, and contact details.
+- The Customer profile form is a preview only. It does not create accounts or retain entered details.
+- Each question retrieves evidence independently; saved chat history is not yet used as model context for follow-up questions. Citation-number checks do not prove every generated sentence is correct.
+- The first embedding-model download needs time and network access. Render Free storage is temporary; both local SQLite and local Qdrant data can reset on restart. Persistent SQL storage and Qdrant hosting are needed for ongoing business use.
 
-See the [security notes](docs/security_notes.md) and [deployment guide](docs/deployment.md) for the production work behind these limits.
+See [security notes](docs/security_notes.md) and [deployment notes](docs/deployment.md).
 
 ## Team contribution
 
